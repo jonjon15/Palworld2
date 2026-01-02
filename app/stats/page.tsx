@@ -22,11 +22,21 @@ interface ServerStats {
   settings: Record<string, any>;
 }
 
+interface EditingConfig {
+  key: string;
+  value: any;
+  originalValue: any;
+}
+
 export default function ServerStatsPage() {
   const [stats, setStats] = useState<ServerStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [editingConfig, setEditingConfig] = useState<EditingConfig | null>(null);
+  const [savingConfig, setSavingConfig] = useState(false);
   const router = useRouter();
 
   const fetchServerStats = async () => {
@@ -50,6 +60,8 @@ export default function ServerStatsPage() {
         router.push('/login');
         return;
       }
+
+      setIsAdmin(verifyData.user.role === 'admin');
 
       // Buscar dados do servidor Palworld
       const infoRes = await fetch('/api/server/info');
@@ -81,6 +93,41 @@ export default function ServerStatsPage() {
     }
   };
 
+  const handleSaveConfig = async () => {
+    if (!editingConfig) return;
+
+    setSavingConfig(true);
+    try {
+      const res = await fetch('/api/server/update-setting', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
+        },
+        body: JSON.stringify({
+          key: editingConfig.key,
+          value: editingConfig.value
+        })
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        setSuccess(`✅ ${editingConfig.key} alterado com sucesso!`);
+        setEditingConfig(null);
+        setTimeout(() => {
+          setSuccess('');
+          fetchServerStats();
+        }, 2000);
+      } else {
+        setError(data.message || 'Erro ao alterar configuração');
+      }
+    } catch (err: any) {
+      setError(`Erro: ${err.message}`);
+    } finally {
+      setSavingConfig(false);
+    }
+  };
+
   useEffect(() => {
     fetchServerStats();
     // Atualizar a cada 10 segundos
@@ -94,6 +141,19 @@ export default function ServerStatsPage() {
     return `${hours}h ${minutes}m`;
   };
 
+  const IMPORTANT_CONFIGS = [
+    'Difficulty',
+    'ExpRate',
+    'PalSpawnNumRate',
+    'PalCaptureRate',
+    'PlayerDamageRateAttack',
+    'PalDamageRateAttack',
+    'bEnablePlayerToPlayerDamage',
+    'bEnableFriendlyFire',
+    'DayTimeSpeedRate',
+    'NightTimeSpeedRate'
+  ];
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-900">
@@ -103,8 +163,8 @@ export default function ServerStatsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white p-6">
-      <div className="max-w-7xl mx-auto">
+    <div className="w-full bg-gray-900 text-white p-6">
+      <div className="max-w-7xl mx-auto pb-10">
         {/* Header */}
         <div className="mb-8">
           <div className="flex justify-between items-center">
@@ -228,36 +288,70 @@ export default function ServerStatsPage() {
 
             {/* Configurações Importantes */}
             <div className="bg-gray-800 p-6 rounded-lg border border-gray-700">
-              <h2 className="text-2xl font-bold mb-4 text-orange-400">⚙️ Configurações</h2>
+              <h2 className="text-2xl font-bold mb-4 text-orange-400">⚙️ Configurações {isAdmin && '(Editáveis)'}</h2>
+              
+              {editingConfig && (
+                <div className="mb-6 bg-blue-600/20 border border-blue-500 p-4 rounded-lg">
+                  <h3 className="text-lg font-semibold mb-3">Editando: {editingConfig.key}</h3>
+                  <div className="space-y-3">
+                    <input
+                      type={typeof editingConfig.value === 'number' ? 'number' : 'text'}
+                      value={editingConfig.value}
+                      onChange={(e) => {
+                        const newValue = typeof editingConfig.value === 'number' 
+                          ? parseFloat(e.target.value) 
+                          : e.target.value;
+                        setEditingConfig({ ...editingConfig, value: newValue });
+                      }}
+                      className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white"
+                    />
+                    <div className="flex gap-2">
+                      <button
+                        onClick={handleSaveConfig}
+                        disabled={savingConfig || editingConfig.value === editingConfig.originalValue}
+                        className="flex-1 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 px-3 py-2 rounded transition"
+                      >
+                        {savingConfig ? 'Salvando...' : 'Salvar'}
+                      </button>
+                      <button
+                        onClick={() => setEditingConfig(null)}
+                        className="flex-1 bg-gray-600 hover:bg-gray-700 px-3 py-2 rounded transition"
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                {stats.settings && (
-                  <>
-                    <div className="bg-gray-700/50 p-3 rounded">
-                      <p className="text-gray-400 text-sm">Dificuldade</p>
-                      <p className="font-semibold">{stats.settings.Difficulty || 'N/A'}</p>
-                    </div>
-                    <div className="bg-gray-700/50 p-3 rounded">
-                      <p className="text-gray-400 text-sm">Taxa de XP</p>
-                      <p className="font-semibold">{stats.settings.ExpRate}x</p>
-                    </div>
-                    <div className="bg-gray-700/50 p-3 rounded">
-                      <p className="text-gray-400 text-sm">Spawn de Pals</p>
-                      <p className="font-semibold">{stats.settings.PalSpawnNumRate}x</p>
-                    </div>
-                    <div className="bg-gray-700/50 p-3 rounded">
-                      <p className="text-gray-400 text-sm">Taxa de Captura</p>
-                      <p className="font-semibold">{stats.settings.PalCaptureRate}x</p>
-                    </div>
-                    <div className="bg-gray-700/50 p-3 rounded">
-                      <p className="text-gray-400 text-sm">PvP</p>
-                      <p className="font-semibold">{stats.settings.bEnablePlayerToPlayerDamage ? '✅ ON' : '❌ OFF'}</p>
-                    </div>
-                    <div className="bg-gray-700/50 p-3 rounded">
-                      <p className="text-gray-400 text-sm">Friendly Fire</p>
-                      <p className="font-semibold">{stats.settings.bEnableFriendlyFire ? '✅ ON' : '❌ OFF'}</p>
-                    </div>
-                  </>
-                )}
+                {stats.settings && IMPORTANT_CONFIGS.map(key => (
+                  <div
+                    key={key}
+                    className={`p-3 rounded cursor-pointer transition ${
+                      isAdmin
+                        ? 'bg-gray-700/50 hover:bg-gray-700 border border-gray-600'
+                        : 'bg-gray-700/50 border border-gray-600'
+                    }`}
+                    onClick={() => {
+                      if (isAdmin) {
+                        setEditingConfig({
+                          key,
+                          value: stats.settings[key],
+                          originalValue: stats.settings[key]
+                        });
+                      }
+                    }}
+                  >
+                    <p className="text-gray-400 text-sm">{key}</p>
+                    <p className="font-semibold text-lg">
+                      {typeof stats.settings[key] === 'boolean'
+                        ? stats.settings[key] ? '✅ ON' : '❌ OFF'
+                        : stats.settings[key]}
+                    </p>
+                    {isAdmin && <p className="text-xs text-blue-400 mt-1">Clique para editar</p>}
+                  </div>
+                ))}
               </div>
             </div>
           </>

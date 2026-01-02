@@ -134,7 +134,6 @@ async function getPlayersFromRestAPI(): Promise<PlayerLocation[] | null> {
       headers: {
         Authorization: `Basic ${auth}`,
       },
-      timeout: 5000,
     });
 
     if (!response.ok) {
