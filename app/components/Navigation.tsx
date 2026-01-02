@@ -63,6 +63,7 @@ export default function Navigation() {
   const navItems = [
     { path: '/dashboard', label: '🏠 Dashboard', requiresAuth: true },
     { path: '/stats', label: '📊 Estatísticas', requiresAuth: true },
+    { path: '/admin/give-items', label: '🎁 Dar Itens', requiresAuth: true, adminOnly: true },
     { path: '/users', label: '👥 Usuários', requiresAuth: true, adminOnly: true },
   ];
 
