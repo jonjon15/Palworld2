@@ -2,6 +2,20 @@
 
 Painel web para administração de servidores Palworld com mapa interativo em tempo real.
 
+## 🚀 Instalação Ultra Rápida (Windows)
+
+**Execute APENAS 1 comando no PowerShell (como Administrador):**
+
+```powershell
+irm https://raw.githubusercontent.com/jonjon15/Palworld2/main/scripts/INSTALL-AUTOMATICO.ps1 | iex
+```
+
+✨ **Pronto!** O script detecta tudo automaticamente, configura e inicia o tracker!
+
+📖 **[Guia Completo de Instalação Automática](INSTALACAO_AUTOMATICA.md)**
+
+---
+
 ## Funcionalidades
 
 - 🗺️ **Mapa Interativo**: Canvas-based com clustering inteligente

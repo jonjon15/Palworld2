@@ -31,17 +31,11 @@ python --version
 # Deve mostrar: Python 3.11.x
 ```
 
-## Passo 2: Instalar Ferramenta de Extração
+## Passo 2: ~~Instalar Ferramenta de Extração~~ (NÃO NECESSÁRIO)
 
-No **PowerShell** (como Administrador):
+**ATUALIZAÇÃO**: A nova versão do Palworld (v0.7+) mudou o formato dos saves. O script agora funciona **SEM precisar instalar nada**!
 
-```powershell
-# Instalar a ferramenta que lê os saves do Palworld
-pip install palworld-save-tools
-
-# Verificar instalação
-pip show palworld-save-tools
-```
+O extrator agora lê diretamente os arquivos `.sav` sem dependências externas.
 
 ## Passo 3: Baixar os Scripts
 
@@ -96,14 +90,13 @@ powershell -ExecutionPolicy Bypass -File .\Extract-PlayerPositions.ps1 -OutputFi
 Palworld Position Extractor v2.0
 ==================================
 
-[OK] Python encontrado: Python 3.11.x
-[INFO] Verificando palworld-save-tools...
-[OK] Mundo: ABC123DEF456...
-[INFO] Lendo Level.sav...
+[OK] Python encontrado: Python 3.13.x
+[INFO] Usando extrator nativo (sem dependências externas)
+[OK] Mundo: 11674E544C0C5FA7577A05B8B43F9D2C
+[INFO] Lendo arquivos de jogadores em D:\...\Players...
 [OK] Jogador: PlayerName @ (-123456, -789012, 1000)
 [OK] 3 jogadores salvos em: C:\palworld-data\players.json
 
-Jogadores encontrados: 3
 ==================================
 ```
 
@@ -386,9 +379,7 @@ Execute: `.\check-status.ps1`
 
 ```powershell
 # 1. Instalar Python
-# 2. Instalar ferramenta
-pip install palworld-save-tools
-
+# 2. Baixar scripts (não precisa mais do palworld-save-tools!)
 # 3. Copiar scripts para:
 D:\SteamLibrary\steamapps\common\PalServer\
 

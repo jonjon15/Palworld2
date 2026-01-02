@@ -23,13 +23,7 @@ try {
     exit 1
 }
 
-# Instalar palworld-save-tools se necessário
-Write-Host "[INFO] Verificando palworld-save-tools..." -ForegroundColor Yellow
-$pipList = pip list 2>&1 | Out-String
-if ($pipList -notmatch "palworld-save-tools") {
-    Write-Host "[INFO] Instalando palworld-save-tools..." -ForegroundColor Yellow
-    pip install palworld-save-tools
-}
+Write-Host "[INFO] Usando extrator nativo (sem dependências externas)" -ForegroundColor Yellow
 
 # Caminho dos saves
 $SavePath = Join-Path $ServerPath "Pal\Saved\SaveGames\0"
@@ -49,72 +43,125 @@ $PythonScript = @"
 import json
 import sys
 import os
+import struct
+import re
 from pathlib import Path
-
-try:
-    from palworld_save_tools.gvas import GvasFile
-    from palworld_save_tools.palsav import decompress_sav_to_gvas, compress_gvas_to_sav
-    from palworld_save_tools.paltypes import PALWORLD_CUSTOM_PROPERTIES
-except ImportError:
-    print('[ERRO] palworld-save-tools não instalado')
-    print('Execute: pip install palworld-save-tools')
-    sys.exit(1)
 
 world_dir = sys.argv[1]
 output_file = sys.argv[2]
 
-# Ler Level.sav
-level_sav = Path(world_dir) / 'Level.sav'
-if not level_sav.exists():
-    print(f'[ERRO] Level.sav não encontrado: {level_sav}')
+# Ler arquivo Players/*.sav
+players_dir = Path(world_dir) / 'Players'
+if not players_dir.exists():
+    print(f'[ERRO] Diretório Players não encontrado: {players_dir}')
     sys.exit(1)
 
-print(f'[INFO] Lendo {level_sav}...')
-
-with open(level_sav, 'rb') as f:
-    data = f.read()
-
-# Decomprimir
-gvas_data = decompress_sav_to_gvas(data)
-gvas_file = GvasFile.read(gvas_data, PALWORLD_CUSTOM_PROPERTIES)
+print(f'[INFO] Lendo arquivos de jogadores em {players_dir}...')
 
 players = []
 
-# Extrair players
-if 'CharacterSaveParameterMap' in gvas_file.properties:
-    char_map = gvas_file.properties['CharacterSaveParameterMap']['value']
-    
-    for char_id, char_data in char_map.items():
-        char_props = char_data['value']
+for sav_file in players_dir.glob('*.sav'):
+    try:
+        with open(sav_file, 'rb') as f:
+            data = f.read()
         
-        # Verificar se é jogador
-        is_player = char_props.get('IsPlayer', {}).get('value', False)
+        # Extrair userId do nome do arquivo
+        user_id = sav_file.stem
         
-        if is_player:
-            raw_data = char_props.get('RawData', {}).get('value', {})
-            
-            # Extrair posição
-            location = raw_data.get('transform', {}).get('translation', {})
-            
-            # Extrair informações
-            player = {
-                'name': char_props.get('NickName', {}).get('value', 'Unknown'),
-                'userId': char_props.get('OwnerPlayerUId', {}).get('value', ''),
-                'playerId': char_id,
-                'level': char_props.get('Level', {}).get('value', 1),
-                'position': {
-                    'x': int(location.get('x', 0)),
-                    'y': int(location.get('y', 0)),
-                    'z': int(location.get('z', 0))
-                },
-                'ping': 0,
-                'timestamp': int(os.path.getmtime(level_sav) * 1000)
-            }
-            
-            players.append(player)
-            print(f'[OK] Jogador: {player["name"]} @ ({player["position"]["x"]}, {player["position"]["y"]}, {player["position"]["z"]})')
+        # Tentar extrair nome do jogador (buscar strings Unicode)
+        name = 'Unknown'
+        
+        # Procurar por padrões de nome (geralmente após "NickName")
+        nickname_pattern = b'NickName\x00.{1,4}'
+        matches = list(re.finditer(nickname_pattern, data))
+        
+        if matches:
+            for match in matches:
+                start = match.end()
+                # Tentar ler string UTF-16
+                try:
+                    end = data.find(b'\x00\x00\x00', start)
+                    if end > start:
+                        potential_name = data[start:end].decode('utf-16-le', errors='ignore').strip()
+                        if potential_name and len(potential_name) < 50 and potential_name.isprintable():
+                            name = potential_name
+                            break
+                except:
+                    pass
+        
+        # Se não encontrou, tentar extrair qualquer string legível
+        if name == 'Unknown':
+            # Procurar por strings UTF-8 legíveis
+            text = data.decode('utf-8', errors='ignore')
+            potential_names = re.findall(r'[A-Za-z0-9_]{3,20}', text)
+            if potential_names:
+                # Pegar o primeiro nome razoável
+                for pn in potential_names:
+                    if not pn.startswith('steam_') and len(pn) >= 3:
+                        name = pn
+                        break
+        
+        # Extrair posição (buscar por padrão de coordenadas)
+        # Coordenadas são geralmente float32 (4 bytes cada)
+        x, y, z = 0, 0, 0
+        
+        # Procurar por padrão de transformação
+        transform_pattern = b'transform\x00'
+        matches = list(re.finditer(transform_pattern, data))
+        
+        for match in matches:
+            try:
+                offset = match.end() + 20  # Pular alguns bytes
+                if offset + 12 <= len(data):
+                    x = struct.unpack('<f', data[offset:offset+4])[0]
+                    y = struct.unpack('<f', data[offset+4:offset+8])[0]
+                    z = struct.unpack('<f', data[offset+8:offset+12])[0]
+                    
+                    # Verificar se as coordenadas são razoáveis (mapa do Palworld)
+                    if abs(x) < 1000000 and abs(y) < 1000000 and abs(z) < 100000:
+                        break
+            except:
+                pass
+        
+        # Extrair nível
+        level = 1
+        level_pattern = b'Level\x00.{1,10}'
+        matches = list(re.finditer(level_pattern, data))
+        
+        for match in matches:
+            try:
+                offset = match.end()
+                if offset + 4 <= len(data):
+                    potential_level = struct.unpack('<I', data[offset:offset+4])[0]
+                    if 1 <= potential_level <= 100:
+                        level = potential_level
+                        break
+            except:
+                pass
+        
+        player = {
+            'name': name,
+            'userId': f'steam_{user_id}',
+            'playerId': user_id,
+            'level': level,
+            'position': {
+                'x': int(x),
+                'y': int(y),
+                'z': int(z)
+            },
+            'ping': 0,
+            'timestamp': int(os.path.getmtime(sav_file) * 1000)
+        }
+        
+        players.append(player)
+        print(f'[OK] Jogador: {player["name"]} @ ({player["position"]["x"]}, {player["position"]["y"]}, {player["position"]["z"]})')
+        
+    except Exception as e:
+        print(f'[WARN] Erro ao processar {sav_file.name}: {e}')
+        continue
 
 # Salvar JSON
+os.makedirs(os.path.dirname(output_file), exist_ok=True)
 with open(output_file, 'w', encoding='utf-8') as f:
     json.dump(players, f, indent=2, ensure_ascii=False)
 
