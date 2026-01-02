@@ -54,16 +54,19 @@ export default function GiveItemsPage() {
   // Carregar jogadores
   const loadPlayers = async () => {
     try {
-      const res = await fetch('/api/players');
+      const res = await fetch('/api/players?status=true');
       const data = await res.json();
-      // Garantir que sempre seja um array
-      if (Array.isArray(data)) {
-        setPlayers(data);
-      } else if (data && Array.isArray(data.players)) {
-        setPlayers(data.players);
-      } else {
-        setPlayers([]);
-      }
+
+      // API responde: { success, data: { players: [...] } }
+      const playersArray = Array.isArray(data)
+        ? data
+        : Array.isArray(data?.players)
+        ? data.players
+        : Array.isArray(data?.data?.players)
+        ? data.data.players
+        : [];
+
+      setPlayers(playersArray);
     } catch (error) {
       console.error('Erro ao carregar jogadores:', error);
       setPlayers([]);
