@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import userDB from '@/lib/database';
 
 export async function POST(request: NextRequest) {
   try {
@@ -12,10 +13,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Decodificar e validar token (implementação simples)
+    // Decodificar e validar token
     try {
       const decoded = Buffer.from(token, 'base64').toString('utf-8');
-      const [username, timestamp] = decoded.split(':');
+      const [userId, username, timestamp] = decoded.split(':');
       
       // Verificar se o token não expirou (24 horas)
       const tokenAge = Date.now() - parseInt(timestamp);
@@ -28,11 +29,23 @@ export async function POST(request: NextRequest) {
         );
       }
 
+      // Verificar se usuário ainda existe e está ativo
+      const user = userDB.findById(parseInt(userId));
+      
+      if (!user) {
+        return NextResponse.json(
+          { valid: false, message: 'Usuário não encontrado' },
+          { status: 401 }
+        );
+      }
+
       return NextResponse.json({
         valid: true,
         user: {
-          username,
-          role: username === 'admin' ? 'admin' : 'user'
+          id: user.id,
+          username: user.username,
+          email: user.email,
+          role: user.role
         }
       });
     } catch (error) {

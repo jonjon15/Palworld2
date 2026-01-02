@@ -13,6 +13,9 @@
     "dev:status": "if [ -f .dev.pid ] && kill -0 $(cat .dev.pid) 2>/dev/null; then echo 'Servidor rodando (PID: '$(cat .dev.pid)')'; else echo 'Servidor parado'; fi"
   },
   "dependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "bcryptjs": "^3.0.3",
+    "better-sqlite3": "^12.5.0",
     "leaflet": "^1.9.4",
     "next": "^14.2.0",
     "rcon": "^1.1.0",

@@ -161,12 +161,22 @@ export default function Dashboard() {
       <div className="container mx-auto p-4">
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-3xl font-bold">Palworld Admin Panel</h1>
-          <button
-            onClick={handleLogout}
-            className="bg-red-600 hover:bg-red-700 px-4 py-2 rounded-lg transition"
-          >
-            Sair
-          </button>
+          <div className="flex gap-3">
+            {isAdmin && (
+              <button
+                onClick={() => router.push('/users')}
+                className="bg-purple-600 hover:bg-purple-700 px-4 py-2 rounded-lg transition"
+              >
+                👥 Gerenciar Usuários
+              </button>
+            )}
+            <button
+              onClick={handleLogout}
+              className="bg-red-600 hover:bg-red-700 px-4 py-2 rounded-lg transition"
+            >
+              Sair
+            </button>
+          </div>
         </div>
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">

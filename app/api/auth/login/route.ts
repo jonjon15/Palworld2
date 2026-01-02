@@ -1,17 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
+import userDB from '@/lib/database';
 import crypto from 'crypto';
 
-// Credenciais padrão (em produção, use variáveis de ambiente e hash de senhas)
-const USERS = {
-  admin: 'palworld',
-  // Adicione mais usuários aqui
-};
-
 // Gerar um token simples (em produção, use JWT)
-function generateToken(username: string): string {
+function generateToken(username: string, userId: number): string {
   const timestamp = Date.now();
   const random = crypto.randomBytes(16).toString('hex');
-  return Buffer.from(`${username}:${timestamp}:${random}`).toString('base64');
+  return Buffer.from(`${userId}:${username}:${timestamp}:${random}`).toString('base64');
 }
 
 export async function POST(request: NextRequest) {
@@ -26,16 +21,29 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Verificar credenciais
-    if (USERS[username as keyof typeof USERS] === password) {
-      const token = generateToken(username);
+    // Verificar credenciais no banco de dados
+    const isValid = userDB.verifyPassword(username, password);
+    
+    if (isValid) {
+      const user = userDB.findByUsername(username);
+      
+      if (!user) {
+        return NextResponse.json(
+          { message: 'Erro ao buscar usuário' },
+          { status: 500 }
+        );
+      }
+
+      const token = generateToken(username, user.id);
       
       return NextResponse.json({
         success: true,
         token,
         user: {
-          username,
-          role: username === 'admin' ? 'admin' : 'user'
+          id: user.id,
+          username: user.username,
+          email: user.email,
+          role: user.role
         }
       });
     }

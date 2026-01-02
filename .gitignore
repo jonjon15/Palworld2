@@ -10,3 +10,9 @@ out/
 # Arquivos do servidor em background
 .dev.pid
 dev.log
+
+# Banco de dados
+data/
+*.db
+*.db-shm
+*.db-wal
