@@ -215,6 +215,47 @@ export default function Dashboard() {
             />
           </div>
         </div>
+
+        {/* Portal Externo */}
+        <div className="bg-gray-800 p-4 rounded-lg border border-gray-700">
+          <h2 className="text-xl font-semibold mb-4 text-cyan-400">🌐 Portal Externo</h2>
+          <p className="text-gray-400 mb-4">Acesse funcionalidades adicionais do Palworld Portal</p>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <a
+              href="http://sukeserver.ddns.net:8080/Player"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500 p-4 rounded-lg transition text-center"
+            >
+              <div className="text-3xl mb-2">👤</div>
+              <div className="font-semibold">Dados do Jogador</div>
+              <div className="text-xs text-gray-400 mt-1">Estatísticas e progresso</div>
+            </a>
+            <a
+              href="http://sukeserver.ddns.net:8080/InterativeMap"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="bg-green-600/20 hover:bg-green-600/30 border border-green-500 p-4 rounded-lg transition text-center"
+            >
+              <div className="text-3xl mb-2">🗺️</div>
+              <div className="font-semibold">Mapa Interativo</div>
+              <div className="text-xs text-gray-400 mt-1">Exploração avançada</div>
+            </a>
+            <a
+              href="http://sukeserver.ddns.net:8080/MyServer"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500 p-4 rounded-lg transition text-center"
+            >
+              <div className="text-3xl mb-2">🖥️</div>
+              <div className="font-semibold">Meus Servidores</div>
+              <div className="text-xs text-gray-400 mt-1">Gerenciamento</div>
+            </a>
+          </div>
+          <div className="mt-4 text-xs text-gray-500 text-center">
+            * Requer login no portal externo
+          </div>
+        </div>
       </div>
 
       {isAdmin && isSpawnModalOpen && summonPosition && (
