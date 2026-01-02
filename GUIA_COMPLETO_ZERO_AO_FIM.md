@@ -50,17 +50,23 @@ Você tem 2 opções:
 ### Opção A: Git (se tiver instalado)
 ```powershell
 cd D:\SteamLibrary\steamapps\common\PalServer
-git clone https://github.com/jonjon15/Palworld2.git portal-scripts
-cd portal-scripts\scripts
+git clone https://github.com/jonjon15/Palworld2.git
+cd Palworld2\scripts
+
+# Copiar scripts para a pasta do servidor
+Copy-Item *.ps1, *.py, *.bat ..\ -Force
+cd ..
 ```
 
-### Opção B: Download Manual
+### Opção B: Download Manual (Mais Simples)
 
-1. Baixe estes arquivos do GitHub:
-   - `scripts/Extract-PlayerPositions.ps1`
-   - `scripts/http_server.py`
-
-2. Salve em: `D:\SteamLibrary\steamapps\common\PalServer\`
+1. Acesse: https://github.com/jonjon15/Palworld2/tree/main/scripts
+2. Baixe estes arquivos:
+   - `Extract-PlayerPositions.ps1`
+   - `http_server.py`
+   - `start-tracker.bat`
+   - `check-status.ps1`
+3. Salve tudo em: `D:\SteamLibrary\steamapps\common\PalServer\`
 
 ## Passo 4: Criar Pasta de Saída
 
