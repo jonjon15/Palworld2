@@ -1,0 +1,133 @@
+╔══════════════════════════════════════════════════════════════════╗
+║                                                                  ║
+║         🎮 PALWORLD TRACKER - INSTALAÇÃO AUTOMÁTICA 🎮          ║
+║                                                                  ║
+╚══════════════════════════════════════════════════════════════════╝
+
+┌──────────────────────────────────────────────────────────────────┐
+│  ⚡ NO SEU PC WINDOWS (onde roda o servidor Palworld)           │
+└──────────────────────────────────────────────────────────────────┘
+
+  1️⃣  Abrir PowerShell como Administrador
+      └─ Win + X → PowerShell (Administrador)
+
+  2️⃣  Colar e executar este comando:
+
+      irm https://raw.githubusercontent.com/jonjon15/Palworld2/main/scripts/INSTALL-AUTOMATICO.ps1 | iex
+
+  3️⃣  Apertar "S" quando perguntar se quer iniciar
+
+  ✅  PRONTO! Vai criar atalho "Palworld Tracker" na área de trabalho
+
+
+┌──────────────────────────────────────────────────────────────────┐
+│  🌐 O QUE O SCRIPT FAZ AUTOMATICAMENTE                          │
+└──────────────────────────────────────────────────────────────────┘
+
+  ✓  Detecta onde está instalado o servidor Palworld
+  ✓  Verifica se Python está instalado (se não, abre download)
+  ✓  Cria pastas necessárias
+  ✓  Baixa e configura todos os scripts
+  ✓  Cria servidor HTTP na porta 8888
+  ✓  Configura firewall automaticamente
+  ✓  Cria atalho na área de trabalho
+  ✓  Executa teste inicial
+  ✓  Inicia o tracker em segundo plano
+
+
+┌──────────────────────────────────────────────────────────────────┐
+│  📊 ARQUIVOS CRIADOS                                            │
+└──────────────────────────────────────────────────────────────────┘
+
+  D:\SteamLibrary\steamapps\common\PalServer\palworld-tracker\
+    ├── Extract-PlayerPositions.ps1  ← Extrator de posições
+    ├── http_server.py               ← Servidor HTTP
+    └── START-TRACKER.bat            ← Inicializador
+
+  C:\palworld-data\
+    └── players.json                 ← Dados em tempo real
+
+  Desktop\
+    └── Palworld Tracker.lnk         ← Atalho para iniciar
+
+
+┌──────────────────────────────────────────────────────────────────┐
+│  🔗 ENDPOINTS DISPONÍVEIS                                       │
+└──────────────────────────────────────────────────────────────────┘
+
+  Local:
+    http://localhost:8888/api/players
+
+  Rede local (para o portal Linux acessar):
+    http://SEU_IP_WINDOWS:8888/api/players
+
+  Descobrir seu IP:
+    ipconfig | Select-String "IPv4"
+
+
+┌──────────────────────────────────────────────────────────────────┐
+│  📖 DOCUMENTAÇÃO                                                │
+└──────────────────────────────────────────────────────────────────┘
+
+  ⚡ Início Rápido:
+     https://github.com/jonjon15/Palworld2/blob/main/INICIO_RAPIDO.md
+
+  🚀 Instalação Automática (detalhes):
+     https://github.com/jonjon15/Palworld2/blob/main/INSTALACAO_AUTOMATICA.md
+
+  📘 Guia Completo:
+     https://github.com/jonjon15/Palworld2/blob/main/GUIA_COMPLETO_ZERO_AO_FIM.md
+
+  🔧 Correção erro PlM:
+     https://github.com/jonjon15/Palworld2/blob/main/FIX_PLM_ERROR.md
+
+
+┌──────────────────────────────────────────────────────────────────┐
+│  🎯 PRÓXIMOS PASSOS                                             │
+└──────────────────────────────────────────────────────────────────┘
+
+  Windows (FEITO!):
+    ✅ Tracker instalado e funcionando
+    ✅ API rodando em http://localhost:8888/api/players
+
+  Linux (Portal Web):
+    1. Configurar .env.local com a URL da API do Windows
+    2. npm install
+    3. npm run dev
+    4. Acessar http://localhost:3001
+
+
+┌──────────────────────────────────────────────────────────────────┐
+│  ⚙️ USANDO O TRACKER                                            │
+└──────────────────────────────────────────────────────────────────┘
+
+  Iniciar:
+    - Duplo-clique no atalho "Palworld Tracker" na área de trabalho
+    - OU execute: START-TRACKER.bat
+
+  Verificar se está funcionando:
+    - Abra http://localhost:8888/api/players no navegador
+    - Deve mostrar JSON com jogadores
+
+  Parar:
+    - Aperte qualquer tecla na janela do tracker
+    - OU: taskkill /F /IM python.exe
+
+
+┌──────────────────────────────────────────────────────────────────┐
+│  💡 DICAS                                                       │
+└──────────────────────────────────────────────────────────────────┘
+
+  • O tracker atualiza posições a cada 10 segundos
+  • Funciona mesmo com o servidor Palworld desligado
+  • Inicialização automática: copie o atalho para shell:startup
+  • Sem dependências externas - só precisa do Python
+  • Compatível com Palworld v0.7+ (novo formato PlM)
+
+
+═══════════════════════════════════════════════════════════════════
+
+            Instalação automatizada criada em 02/01/2026
+                  Qualquer dúvida, consulte a docs!
+
+═══════════════════════════════════════════════════════════════════
