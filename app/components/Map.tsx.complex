@@ -1,0 +1,416 @@
+﻿'use client';
+
+import { useEffect, useRef, useState } from 'react';
+import { io, Socket } from 'socket.io-client';
+
+interface Player {
+  name: string;
+  playerId: string;
+  userId: string;
+  level: number;
+  ping: number;
+  location: {
+    x: number;
+    y: number;
+  };
+  server?: string;
+  steamId?: string;
+}
+
+interface MapState {
+  zoom: number;
+  offsetX: number;
+  offsetY: number;
+  isDragging: boolean;
+  dragStartX: number;
+  dragStartY: number;
+  selectedServerId: string;
+  markers: {
+    player: Player[];
+    bosstower: any[];
+    fasttravel: any[];
+    dungeons: any[];
+  };
+  selectedPosition: { x: number; y: number } | null;
+  isAdmin: boolean;
+}
+
+interface MapProps {
+  players: Player[];
+  onMapClick?: (x: number, y: number) => void;
+  isAdmin?: boolean;
+  selectedServerId?: string;
+  onServerChange?: (serverId: string) => void;
+}
+
+// Calibração baseada em ponto de referência do jogo
+// Planalto do Começo - coordenadas aproximadas do Palworld
+const REF_WORLD_X = 0; // centro aproximado do mapa
+const REF_WORLD_Y = 0; // centro aproximado do mapa
+const REF_CANVAS_X = 960; // centro do canvas
+const REF_CANVAS_Y = 540; // centro do canvas
+
+// Range realista do mundo do Palworld (muito menor que 400k)
+const MAP_WORLD_MIN_X = -500000;
+const MAP_WORLD_MAX_X = 500000;
+const MAP_WORLD_MIN_Y = -500000;
+const MAP_WORLD_MAX_Y = 500000;
+const MAP_WORLD_WIDTH = MAP_WORLD_MAX_X - MAP_WORLD_MIN_X;
+const MAP_WORLD_HEIGHT = MAP_WORLD_MAX_Y - MAP_WORLD_MIN_Y;
+const MAP_CANVAS_WIDTH = 1920;
+const MAP_CANVAS_HEIGHT = 1080;
+
+// Constantes para conversão de coordenadas (simplificadas)
+const MAP_WIDTH = MAP_WORLD_WIDTH;
+const MAP_HEIGHT = MAP_WORLD_HEIGHT;
+const MAP_CENTER_X = MAP_WORLD_WIDTH / 2;
+const MAP_CENTER_Y = MAP_WORLD_HEIGHT / 2;
+
+export default function Map({ players, onMapClick, isAdmin = false, selectedServerId = '', onServerChange }: MapProps) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const socketRef = useRef<Socket | null>(null);
+  const [mapState, setMapState] = useState<MapState>({
+    zoom: 1,
+    offsetX: 0,
+    offsetY: 0,
+    isDragging: false,
+    dragStartX: 0,
+    dragStartY: 0,
+    selectedServerId,
+    markers: {
+      player: players,
+      bosstower: [],
+      fasttravel: [],
+      dungeons: []
+    },
+    selectedPosition: null,
+    isAdmin
+  });
+
+  const [mapImage, setMapImage] = useState<HTMLImageElement | null>(null);
+
+  useEffect(() => {
+    const img = new Image();
+    img.src = '/map/palworld-map.png';
+    img.onload = () => {
+      console.log('Map image loaded successfully');
+      setMapImage(img);
+    };
+    img.onerror = () => {
+      console.error('Failed to load map image');
+    };
+  }, []);
+
+  // Conectar ao Socket.IO para atualizações em tempo real
+  useEffect(() => {
+    const socket = io(process.env.NODE_ENV === 'production' ? '' : 'http://localhost:3000', {
+      path: '/api/socket'
+    });
+
+    socketRef.current = socket;
+
+    socket.on('connect', () => {
+      console.log('Connected to Socket.IO server');
+      socket.emit('join-map');
+    });
+
+    socket.on('players-update', (data: { players: Player[]; timestamp: string }) => {
+      console.log('Real-time players update:', data.players.length, 'players');
+      setMapState(prev => ({
+        ...prev,
+        markers: { ...prev.markers, player: data.players }
+      }));
+    });
+
+    socket.on('disconnect', () => {
+      console.log('Disconnected from Socket.IO server');
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, []);
+
+  useEffect(() => {
+    console.log('Map component received players:', players.length);
+    setMapState(prev => ({
+      ...prev,
+      markers: { ...prev.markers, player: players },
+      selectedServerId,
+      isAdmin
+    }));
+  }, [players, selectedServerId, isAdmin]);
+
+
+  // Converte coordenadas do mundo do Palworld para o canvas
+  const worldToCanvas = (worldX: number, worldY: number) => {
+    // Conversão direta: mapeia coordenadas do mundo para coordenadas do canvas
+    // O mundo do Palworld vai aproximadamente de -20000 a 20000
+    // O canvas vai de 0 a 1920 (largura) e 0 a 1080 (altura)
+
+    // Calcula a posição relativa no mundo (0-1)
+    const relativeX = (worldX - MAP_WORLD_MIN_X) / MAP_WORLD_WIDTH;
+    const relativeY = (worldY - MAP_WORLD_MIN_Y) / MAP_WORLD_HEIGHT;
+
+    // Converte para coordenadas do canvas
+    const canvasX = (1 - relativeX) * MAP_CANVAS_WIDTH; // Inverte X para testar
+    const canvasY = relativeY * MAP_CANVAS_HEIGHT;
+
+    // Garante que as coordenadas estejam dentro dos limites do canvas
+    const clampedX = Math.max(0, Math.min(MAP_CANVAS_WIDTH, canvasX));
+    const clampedY = Math.max(0, Math.min(MAP_CANVAS_HEIGHT, canvasY));
+
+    console.log('[DEBUG] Coordenadas:', {
+      worldX, worldY,
+      relativeX, relativeY,
+      canvasX: clampedX, canvasY: clampedY
+    });
+
+    return { x: clampedX, y: clampedY };
+  };
+
+  const canvasToWorld = (canvasX: number, canvasY: number) => {
+    // Converte coordenadas do canvas de volta para coordenadas do mundo
+    const relativeX = 1 - (canvasX / MAP_CANVAS_WIDTH); // Inverte X para ser consistente
+    const relativeY = canvasY / MAP_CANVAS_HEIGHT;
+
+    const worldX = MAP_WORLD_MIN_X + (relativeX * MAP_WORLD_WIDTH);
+    const worldY = MAP_WORLD_MIN_Y + (relativeY * MAP_WORLD_HEIGHT);
+
+    return { x: worldX, y: worldY };
+  };
+
+  const gameToMapCoords = (x: number, y: number) => {
+    // Mesma lógica que worldToCanvas, mas retorna array [y, x] (formato específico)
+    const pos = worldToCanvas(x, y);
+    return [pos.y, pos.x];
+  };
+
+  const drawMap = () => {
+    const canvas = canvasRef.current;
+    if (!canvas || !mapImage) return;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    ctx.save();
+
+    // Aplicar zoom e offset
+    ctx.translate(mapState.offsetX, mapState.offsetY);
+    ctx.scale(mapState.zoom, mapState.zoom);
+
+    // Desenhar imagem do mapa
+    ctx.drawImage(mapImage, 0, 0, 1920, 1080);
+
+    // Desenhar marcadores dos jogadores (versão simplificada para debug)
+    console.log('Drawing players on map:', mapState.markers.player.length);
+    mapState.markers.player.forEach(player => {
+      console.log('Drawing player:', player.name, 'at', player.location.x, player.location.y);
+      const pos = worldToCanvas(player.location.x, player.location.y);
+
+      // Círculo simples do jogador
+      ctx.fillStyle = 'rgba(59, 130, 246, 0.8)';
+      ctx.beginPath();
+      ctx.arc(pos.x, pos.y, 10, 0, 2 * Math.PI);
+      ctx.fill();
+
+      // Borda
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      // Nome do jogador
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '14px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText(player.name, pos.x, pos.y - 20);
+
+      console.log('Drew player', player.name, 'at canvas position', pos.x, pos.y);
+    });
+
+    // Desenhar posição selecionada (se houver)
+    if (mapState.selectedPosition) {
+      const pos = worldToCanvas(mapState.selectedPosition.x, mapState.selectedPosition.y);
+      ctx.fillStyle = 'rgba(239, 68, 68, 0.8)';
+      ctx.beginPath();
+      ctx.arc(pos.x, pos.y, 6, 0, 2 * Math.PI);
+      ctx.fill();
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+
+    ctx.restore();
+  };
+
+  useEffect(() => {
+    drawMap();
+  }, [mapState, mapImage]);
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const rect = canvas.getBoundingClientRect();
+    setMapState(prev => ({
+      ...prev,
+      isDragging: true,
+      dragStartX: e.clientX - rect.left - prev.offsetX,
+      dragStartY: e.clientY - rect.top - prev.offsetY
+    }));
+    canvas.style.cursor = 'grabbing';
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!mapState.isDragging) return;
+
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const rect = canvas.getBoundingClientRect();
+    setMapState(prev => ({
+      ...prev,
+      offsetX: e.clientX - rect.left - prev.dragStartX,
+      offsetY: e.clientY - rect.top - prev.dragStartY
+    }));
+  };
+
+  const handleMouseUp = () => {
+    setMapState(prev => ({ ...prev, isDragging: false }));
+    const canvas = canvasRef.current;
+    if (canvas) canvas.style.cursor = 'grab';
+  };
+
+  const handleWheel = (e: React.WheelEvent) => {
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? 0.9 : 1.1;
+    setMapState(prev => ({
+      ...prev,
+      zoom: Math.max(0.5, Math.min(5, prev.zoom * delta))
+    }));
+  };
+
+  const handleClick = (e: React.MouseEvent) => {
+    if (!isAdmin || !onMapClick) return;
+
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const canvasX = (e.clientX - rect.left - mapState.offsetX) / mapState.zoom;
+    const canvasY = (e.clientY - rect.top - mapState.offsetY) / mapState.zoom;
+
+    const worldPos = canvasToWorld(canvasX, canvasY);
+    setMapState(prev => ({ ...prev, selectedPosition: worldPos }));
+    onMapClick(worldPos.x, worldPos.y);
+  };
+
+  const zoomIn = () => {
+    setMapState(prev => ({ ...prev, zoom: Math.min(prev.zoom * 1.2, 5) }));
+  };
+
+  const zoomOut = () => {
+    setMapState(prev => ({ ...prev, zoom: Math.max(prev.zoom / 1.2, 0.5) }));
+  };
+
+  const resetView = () => {
+    setMapState(prev => ({ ...prev, zoom: 1, offsetX: 0, offsetY: 0 }));
+  };
+
+  // Highlight selected player marker
+  const highlightPlayer = (playerId: string) => {
+    const player = players.find((p) => p.playerId === playerId);
+    if (player) {
+      const pos = worldToCanvas(player.location.x, player.location.y);
+
+      // Centralizar no jogador com zoom
+      const canvas = canvasRef.current;
+      if (canvas) {
+        const canvasWidth = canvas.width;
+        const canvasHeight = canvas.height;
+
+        setMapState(prev => ({
+          ...prev,
+          zoom: 3,
+          offsetX: canvasWidth / 2 - pos.x * 3,
+          offsetY: canvasHeight / 2 - pos.y * 3
+        }));
+      }
+    }
+  };
+
+  useEffect(() => {
+    const handleHighlightPlayer = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      highlightPlayer(customEvent.detail);
+    };
+
+    document.addEventListener('highlightPlayer', handleHighlightPlayer);
+
+    return () => {
+      document.removeEventListener('highlightPlayer', handleHighlightPlayer);
+    };
+  }, [players]);
+
+  if (!mapImage) {
+    return (
+      <div className="w-full h-[600px] bg-gray-800 rounded-lg flex items-center justify-center">
+        <p className="text-gray-400">Carregando mapa...</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative w-full h-[600px] rounded-lg overflow-hidden border border-gray-700">
+      <canvas
+        ref={canvasRef}
+        width={1920}
+        height={1080}
+        className="w-full h-full cursor-grab"
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseUp}
+        onWheel={handleWheel}
+        onClick={handleClick}
+        style={{ imageRendering: 'pixelated' }}
+      />
+
+      {/* Controles de Zoom Melhorados */}
+      <div className="absolute top-4 right-4 flex flex-col gap-2">
+        <button
+          onClick={zoomIn}
+          className="bg-blue-600 hover:bg-blue-500 text-white p-3 rounded-full shadow-md transition-transform transform hover:scale-110"
+          title="Aproximar"
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M12 5v14M5 12h14"/>
+          </svg>
+        </button>
+        <button
+          onClick={zoomOut}
+          className="bg-blue-600 hover:bg-blue-500 text-white p-3 rounded-full shadow-md transition-transform transform hover:scale-110"
+          title="Afastar"
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M5 12h14"/>
+          </svg>
+        </button>
+        <button
+          onClick={resetView}
+          className="bg-gray-700 hover:bg-gray-600 text-white p-3 rounded-full shadow-md transition-transform transform hover:scale-110"
+          title="Resetar Visão"
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
+            <path d="M21 3v5h-5"/>
+            <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
+            <path d="M8 16H3v5"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  );
+}

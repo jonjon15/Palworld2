@@ -1,0 +1,917 @@
+#!/bin/bash
+
+# Script de setup do Palworld Admin Panel
+# Execute: bash setup-project.sh
+
+echo "🚀 Criando estrutura do projeto Palworld Admin Panel..."
+
+# Criar estrutura de pastas
+mkdir -p app/api/server/info
+mkdir -p app/api/players
+mkdir -p app/api/pals/spawn
+mkdir -p app/components
+mkdir -p services
+mkdir -p types
+mkdir -p public/map
+
+# ============= package.json =============
+cat > package.json << 'EOF'
+{
+  "name": "palworld-admin-panel",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "next": "^14.2.0",
+    "react": "^18.3.0",
+    "react-dom": "^18.3.0",
+    "react-leaflet": "^4.2.1",
+    "leaflet": "^1.9.4",
+    "rcon-client": "^4.2.3"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.0",
+    "@types/leaflet": "^1.9.8",
+    "typescript": "^5.0.0",
+    "tailwindcss": "^3.4.0",
+    "postcss": "^8.4.0",
+    "autoprefixer": "^10.4.0"
+  }
+}
+EOF
+
+# ============= tsconfig.json =============
+cat > tsconfig.json << 'EOF'
+{
+  "compilerOptions": {
+    "target": "ES2017",
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "allowJs": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "preserve",
+    "incremental": true,
+    "plugins": [{"name": "next"}],
+    "paths": {"@/*": ["./*"]}
+  },
+  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
+  "exclude": ["node_modules"]
+}
+EOF
+
+# ============= next.config.js =============
+cat > next.config.js << 'EOF'
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  reactStrictMode: true,
+}
+
+module.exports = nextConfig
+EOF
+
+# ============= tailwind.config.ts =============
+cat > tailwind.config.ts << 'EOF'
+import type { Config } from 'tailwindcss'
+
+const config: Config = {
+  content: [
+    './pages/**/*.{js,ts,jsx,tsx,mdx}',
+    './components/**/*.{js,ts,jsx,tsx,mdx}',
+    './app/**/*.{js,ts,jsx,tsx,mdx}',
+  ],
+  theme: {
+    extend: {},
+  },
+  plugins: [],
+}
+export default config
+EOF
+
+# ============= postcss.config.js =============
+cat > postcss.config.js << 'EOF'
+module.exports = {
+  plugins: {
+    tailwindcss: {},
+    autoprefixer: {},
+  },
+}
+EOF
+
+# ============= .env.example =============
+cat > .env.example << 'EOF'
+# REST API do Palworld
+PALWORLD_API_URL=http://seu-servidor:8212
+PALWORLD_API_USERNAME=admin
+PALWORLD_API_PASSWORD=sua_senha_segura
+
+# RCON (para comandos de spawn)
+PALWORLD_RCON_HOST=seu-servidor
+PALWORLD_RCON_PORT=25575
+PALWORLD_RCON_PASSWORD=sua_senha_rcon
+EOF
+
+# ============= .gitignore =============
+cat > .gitignore << 'EOF'
+node_modules/
+.next/
+out/
+.env.local
+.env*.local
+.vercel
+*.log
+.DS_Store
+EOF
+
+# ============= types/palworld.ts =============
+cat > types/palworld.ts << 'EOF'
+export interface ServerInfo {
+  version: string;
+  servername: string;
+  description: string;
+}
+
+export interface PlayerLocation {
+  x: number;
+  y: number;
+  z: number;
+}
+
+export interface Player {
+  name: string;
+  playerId: string;
+  userId: string;
+  ip: string;
+  ping: number;
+  location_x: number;
+  location_y: number;
+  level: number;
+}
+
+export interface PlayersResponse {
+  players: Player[];
+}
+
+export interface SpawnRequest {
+  palId: string;
+  quantity: number;
+  coordinates: {
+    x: number;
+    y: number;
+    z: number;
+  };
+}
+EOF
+
+# ============= services/palworldApiClient.ts =============
+cat > services/palworldApiClient.ts << 'EOF'
+interface PalworldConfig {
+  baseUrl: string;
+  username: string;
+  password: string;
+}
+
+class PalworldApiClient {
+  private config: PalworldConfig;
+  private authHeader: string;
+
+  constructor() {
+    const baseUrl = process.env.PALWORLD_API_URL;
+    const username = process.env.PALWORLD_API_USERNAME;
+    const password = process.env.PALWORLD_API_PASSWORD;
+
+    if (!baseUrl || !username || !password) {
+      throw new Error('Missing required environment variables for Palworld API');
+    }
+
+    this.config = { baseUrl, username, password };
+    this.authHeader = 'Basic ' + Buffer.from(`${username}:${password}`).toString('base64');
+  }
+
+  private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+    const url = `${this.config.baseUrl}${endpoint}`;
+
+    const response = await fetch(url, {
+      ...options,
+      headers: {
+        'Authorization': this.authHeader,
+        'Content-Type': 'application/json',
+        ...options.headers,
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Palworld API error: ${response.status} ${response.statusText}`);
+    }
+
+    return response.json();
+  }
+
+  async getServerInfo() {
+    return this.request('/v1/api/info');
+  }
+
+  async getPlayers() {
+    return this.request('/v1/api/players');
+  }
+}
+
+export const palworldApi = new PalworldApiClient();
+EOF
+
+# ============= services/rconClient.ts =============
+cat > services/rconClient.ts << 'EOF'
+import { Rcon } from 'rcon-client';
+
+interface RconConfig {
+  host: string;
+  port: number;
+  password: string;
+}
+
+class RconClient {
+  private config: RconConfig;
+
+  constructor() {
+    const host = process.env.PALWORLD_RCON_HOST;
+    const port = process.env.PALWORLD_RCON_PORT;
+    const password = process.env.PALWORLD_RCON_PASSWORD;
+
+    if (!host || !port || !password) {
+      throw new Error('Missing required RCON environment variables');
+    }
+
+    this.config = {
+      host,
+      port: parseInt(port),
+      password
+    };
+  }
+
+  async executeCommand(command: string): Promise<string> {
+    const rcon = await Rcon.connect({
+      host: this.config.host,
+      port: this.config.port,
+      password: this.config.password
+    });
+
+    try {
+      const response = await rcon.send(command);
+      return response;
+    } finally {
+      rcon.end();
+    }
+  }
+
+  async spawnPal(palId: string, quantity: number, x: number, y: number, z: number): Promise<string> {
+    const command = `/SpawnPal ${palId} ${quantity} ${x} ${y} ${z}`;
+    return this.executeCommand(command);
+  }
+}
+
+export const rconClient = new RconClient();
+EOF
+
+# ============= app/globals.css =============
+cat > app/globals.css << 'EOF'
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  @apply bg-gray-900 text-gray-100;
+}
+
+.leaflet-container {
+  background: #1a1a1a;
+}
+
+.leaflet-popup-content-wrapper {
+  @apply bg-gray-800 text-gray-100;
+}
+
+.leaflet-popup-tip {
+  @apply bg-gray-800;
+}
+EOF
+
+# ============= app/layout.tsx =============
+cat > app/layout.tsx << 'EOF'
+import type { Metadata } from 'next'
+import { Inter } from 'next/font/google'
+import './globals.css'
+import 'leaflet/dist/leaflet.css'
+
+const inter = Inter({ subsets: ['latin'] })
+
+export const metadata: Metadata = {
+  title: 'Palworld Admin Panel',
+  description: 'Administration panel for Palworld servers',
+}
+
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
+  return (
+    <html lang="en">
+      <body className={inter.className}>{children}</body>
+    </html>
+  )
+}
+EOF
+
+# ============= app/page.tsx =============
+cat > app/page.tsx << 'EOF'
+'use client';
+
+import { useEffect, useState } from 'react';
+import dynamic from 'next/dynamic';
+import SpawnModal from './components/SpawnModal';
+
+const Map = dynamic(() => import('./components/Map'), { ssr: false });
+
+interface ServerInfo {
+  servername: string;
+  version: string;
+  description: string;
+}
+
+interface Player {
+  name: string;
+  playerId: string;
+  userId: string;
+  level: number;
+  ping: number;
+  location: {
+    x: number;
+    y: number;
+  };
+}
+
+export default function Home() {
+  const [serverInfo, setServerInfo] = useState<ServerInfo | null>(null);
+  const [players, setPlayers] = useState<Player[]>([]);
+  const [isSpawnModalOpen, setIsSpawnModalOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  const fetchServerInfo = async () => {
+    try {
+      const res = await fetch('/api/server/info');
+      const data = await res.json();
+      if (data.success) {
+        setServerInfo(data.data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch server info:', err);
+    }
+  };
+
+  const fetchPlayers = async () => {
+    try {
+      const res = await fetch('/api/players');
+      const data = await res.json();
+      if (data.success) {
+        setPlayers(data.data.players);
+      }
+    } catch (err) {
+      console.error('Failed to fetch players:', err);
+    }
+  };
+
+  const handleSpawn = async (palId: string, quantity: number, x: number, y: number, z: number) => {
+    try {
+      const res = await fetch('/api/pals/spawn', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          palId,
+          quantity,
+          coordinates: { x, y, z }
+        }),
+      });
+
+      const data = await res.json();
+      
+      if (data.success) {
+        alert('Pal spawned successfully!');
+        setIsSpawnModalOpen(false);
+      } else {
+        alert(`Error: ${data.error}`);
+      }
+    } catch (err) {
+      alert('Failed to spawn pal');
+    }
+  };
+
+  useEffect(() => {
+    const loadData = async () => {
+      setLoading(true);
+      await Promise.all([fetchServerInfo(), fetchPlayers()]);
+      setLoading(false);
+    };
+
+    loadData();
+
+    const interval = setInterval(() => {
+      fetchPlayers();
+    }, 10000);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <p className="text-gray-400">Loading server data...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <main className="min-h-screen p-8">
+      <div className="max-w-7xl mx-auto">
+        <header className="mb-8">
+          <h1 className="text-4xl font-bold mb-2">
+            {serverInfo?.servername || 'Palworld Server'}
+          </h1>
+          <p className="text-gray-400">
+            Version: {serverInfo?.version || 'Unknown'} | Players Online: {players.length}
+          </p>
+        </header>
+
+        <div className="mb-6 flex gap-4">
+          <button
+            onClick={() => setIsSpawnModalOpen(true)}
+            className="px-6 py-3 bg-blue-600 hover:bg-blue-700 rounded-lg font-semibold transition-colors"
+          >
+            Spawn Pal
+          </button>
+          <button
+            onClick={fetchPlayers}
+            className="px-6 py-3 bg-gray-700 hover:bg-gray-600 rounded-lg font-semibold transition-colors"
+          >
+            Refresh Players
+          </button>
+        </div>
+
+        <div className="mb-6 bg-gray-800 rounded-lg p-6 border border-gray-700">
+          <h2 className="text-2xl font-bold mb-4">Online Players</h2>
+          {players.length === 0 ? (
+            <p className="text-gray-400">No players online</p>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {players.map((player) => (
+                <div key={player.playerId} className="bg-gray-700 rounded-lg p-4">
+                  <p className="font-bold text-lg">{player.name}</p>
+                  <p className="text-sm text-gray-400">Level: {player.level}</p>
+                  <p className="text-sm text-gray-400">Ping: {player.ping}ms</p>
+                  <p className="text-xs text-gray-500 mt-2">
+                    Pos: {player.location.x.toFixed(0)}, {player.location.y.toFixed(0)}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
+          <h2 className="text-2xl font-bold mb-4">Player Map</h2>
+          <Map players={players} />
+        </div>
+      </div>
+
+      <SpawnModal
+        isOpen={isSpawnModalOpen}
+        onClose={() => setIsSpawnModalOpen(false)}
+        onSpawn={handleSpawn}
+      />
+    </main>
+  );
+}
+EOF
+
+# ============= app/components/Map.tsx =============
+cat > app/components/Map.tsx << 'EOF'
+'use client';
+
+import { useEffect, useState } from 'react';
+import dynamic from 'next/dynamic';
+import type { Player } from '@/types/palworld';
+
+const MapContainer = dynamic(
+  () => import('react-leaflet').then((mod) => mod.MapContainer),
+  { ssr: false }
+);
+
+const TileLayer = dynamic(
+  () => import('react-leaflet').then((mod) => mod.TileLayer),
+  { ssr: false }
+);
+
+const Marker = dynamic(
+  () => import('react-leaflet').then((mod) => mod.Marker),
+  { ssr: false }
+);
+
+const Popup = dynamic(
+  () => import('react-leaflet').then((mod) => mod.Popup),
+  { ssr: false }
+);
+
+interface MapProps {
+  players: Player[];
+}
+
+export default function Map({ players }: MapProps) {
+  const [isClient, setIsClient] = useState(false);
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
+  if (!isClient) {
+    return (
+      <div className="w-full h-[600px] bg-gray-800 rounded-lg flex items-center justify-center">
+        <p className="text-gray-400">Loading map...</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="w-full h-[600px] rounded-lg overflow-hidden border border-gray-700">
+      <MapContainer
+        center={[0, 0]}
+        zoom={3}
+        style={{ height: '100%', width: '100%' }}
+        className="z-0"
+      >
+        <TileLayer
+          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+        />
+        
+        {players.map((player) => (
+          <Marker
+            key={player.playerId}
+            position={[player.location.y / 1000, player.location.x / 1000]}
+          >
+            <Popup>
+              <div className="text-sm">
+                <p className="font-bold">{player.name}</p>
+                <p className="text-xs text-gray-400">Level: {player.level}</p>
+                <p className="text-xs text-gray-400">Ping: {player.ping}ms</p>
+              </div>
+            </Popup>
+          </Marker>
+        ))}
+      </MapContainer>
+    </div>
+  );
+}
+EOF
+
+# ============= app/components/SpawnModal.tsx =============
+cat > app/components/SpawnModal.tsx << 'EOF'
+'use client';
+
+import { useState } from 'react';
+
+interface SpawnModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onSpawn: (palId: string, quantity: number, x: number, y: number, z: number) => void;
+}
+
+export default function SpawnModal({ isOpen, onClose, onSpawn }: SpawnModalProps) {
+  const [palId, setPalId] = useState('');
+  const [quantity, setQuantity] = useState(1);
+  const [x, setX] = useState(0);
+  const [y, setY] = useState(0);
+  const [z, setZ] = useState(0);
+
+  if (!isOpen) return null;
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    onSpawn(palId, quantity, x, y, z);
+    setPalId('');
+    setQuantity(1);
+    setX(0);
+    setY(0);
+    setZ(0);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-gray-800 rounded-lg p-6 w-full max-w-md border border-gray-700">
+        <h2 className="text-2xl font-bold mb-4">Spawn Pal</h2>
+        
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium mb-1">Pal ID</label>
+            <input
+              type="text"
+              value={palId}
+              onChange={(e) => setPalId(e.target.value)}
+              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="e.g., Lamball"
+              required
+            />
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium mb-1">Quantity (1-100)</label>
+            <input
+              type="number"
+              value={quantity}
+              onChange={(e) => setQuantity(parseInt(e.target.value))}
+              min="1"
+              max="100"
+              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              required
+            />
+          </div>
+          
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <label className="block text-sm font-medium mb-1">X</label>
+              <input
+                type="number"
+                value={x}
+                onChange={(e) => setX(parseFloat(e.target.value))}
+                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                required
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium mb-1">Y</label>
+              <input
+                type="number"
+                value={y}
+                onChange={(e) => setY(parseFloat(e.target.value))}
+                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                required
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium mb-1">Z</label>
+              <input
+                type="number"
+                value={z}
+                onChange={(e) => setZ(parseFloat(e.target.value))}
+                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                required
+              />
+            </div>
+          </div>
+          
+          <div className="flex gap-3 pt-4">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-md transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-md transition-colors"
+            >
+              Spawn
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+EOF
+
+# ============= app/api/server/info/route.ts =============
+cat > app/api/server/info/route.ts << 'EOF'
+import { NextResponse } from 'next/server';
+import { palworldApi } from '@/services/palworldApiClient';
+
+export async function GET() {
+  try {
+    const data = await palworldApi.getServerInfo();
+    
+    return NextResponse.json({
+      success: true,
+      data: {
+        version: data.version,
+        servername: data.servername,
+        description: data.description
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching server info:', error);
+    
+    return NextResponse.json(
+      { 
+        success: false, 
+        error: 'Failed to fetch server information' 
+      },
+      { status: 500 }
+    );
+  }
+}
+EOF
+
+# ============= app/api/players/route.ts =============
+cat > app/api/players/route.ts << 'EOF'
+import { NextResponse } from 'next/server';
+import { palworldApi } from '@/services/palworldApiClient';
+import type { Player } from '@/types/palworld';
+
+export async function GET() {
+  try {
+    const data = await palworldApi.getPlayers();
+    
+    const players = data.players.map((player: Player) => ({
+      name: player.name,
+      playerId: player.playerId,
+      userId: player.userId,
+      level: player.level,
+      ping: player.ping,
+      location: {
+        x: player.location_x,
+        y: player.location_y
+      }
+    }));
+    
+    return NextResponse.json({
+      success: true,
+      data: {
+        players,
+        count: players.length
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching players:', error);
+    
+    return NextResponse.json(
+      { 
+        success: false, 
+        error: 'Failed to fetch players' 
+      },
+      { status: 500 }
+    );
+  }
+}
+EOF
+
+# ============= app/api/pals/spawn/route.ts =============
+cat > app/api/pals/spawn/route.ts << 'EOF'
+import { NextRequest, NextResponse } from 'next/server';
+import { rconClient } from '@/services/rconClient';
+import type { SpawnRequest } from '@/types/palworld';
+
+export async function POST(request: NextRequest) {
+  try {
+    const body: SpawnRequest = await request.json();
+    
+    if (!body.palId || typeof body.palId !== 'string') {
+      return NextResponse.json(
+        { success: false, error: 'Invalid palId' },
+        { status: 400 }
+      );
+    }
+    
+    if (!body.quantity || body.quantity < 1 || body.quantity > 100) {
+      return NextResponse.json(
+        { success: false, error: 'Quantity must be between 1 and 100' },
+        { status: 400 }
+      );
+    }
+    
+    if (!body.coordinates || 
+        typeof body.coordinates.x !== 'number' ||
+        typeof body.coordinates.y !== 'number' ||
+        typeof body.coordinates.z !== 'number') {
+      return NextResponse.json(
+        { success: false, error: 'Invalid coordinates' },
+        { status: 400 }
+      );
+    }
+    
+    const response = await rconClient.spawnPal(
+      body.palId,
+      body.quantity,
+      body.coordinates.x,
+      body.coordinates.y,
+      body.coordinates.z
+    );
+    
+    return NextResponse.json({
+      success: true,
+      data: {
+        message: 'Pal spawned successfully',
+        response
+      }
+    });
+  } catch (error) {
+    console.error('Error spawning pal:', error);
+    
+    return NextResponse.json(
+      { 
+        success: false, 
+        error: 'Failed to spawn pal' 
+      },
+      { status: 500 }
+    );
+  }
+}
+EOF
+
+# ============= README.md =============
+cat > README.md << 'EOF'
+# Palworld Admin Panel
+
+Painel de administração web para servidores Palworld.
+
+## 🚀 Quick Start
+
+```bash
+# 1. Instalar dependências
+npm install
+
+# 2. Configurar ambiente
+cp .env.example .env.local
+# Edite .env.local com suas credenciais
+
+# 3. Rodar
+npm run dev
+```
+
+Acesse: http://localhost:3000
+
+## 📋 Funcionalidades
+
+✅ Info do servidor  
+✅ Jogadores online  
+✅ Mapa interativo  
+✅ Spawn de Pals via RCON  
+✅ Atualização automática
+
+## 🔧 Configuração do Servidor Palworld
+
+Edite `PalWorldSettings.ini`:
+
+```ini
+[/Script/Pal.PalGameWorldSettings]
+RESTAPIEnabled=True
+RESTAPIPort=8212
+AdminPassword=sua_senha
+
+RCONEnabled=True
+RCONPort=25575
+```
+
+## 📦 Deploy Vercel
+
+1. Push para GitHub
+2. Import na Vercel
+3. Configure env vars
+4. Deploy!
+
+## 📚 Stack
+
+- Next.js 14
+- TypeScript
+- Tailwind CSS
+- Leaflet
+- RCON Client
+EOF
+
+echo ""
+echo "✅ Estrutura do projeto criada com sucesso!"
+echo ""
+echo "📋 Próximos passos:"
+echo "1. npm install"
+echo "2. cp .env.example .env.local"
+echo "3. Edite .env.local com suas credenciais"
+echo "4. npm run dev"
+echo ""
+echo "🚀 Projeto pronto para uso!"

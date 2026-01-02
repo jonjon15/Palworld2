@@ -1,0 +1,9 @@
+server_id: pal-01
+server_name: Palworld Brasil #1
+json_path: C:/PalServer/monitor/players_positions.json
+
+api:
+  endpoint: https://api.seuportal.com/ingest
+  token: TOKEN_DO_SERVIDOR
+
+interval_seconds: 5

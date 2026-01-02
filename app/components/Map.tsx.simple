@@ -1,0 +1,145 @@
+﻿'use client';
+
+import { useEffect, useRef, useState } from 'react';
+
+interface Player {
+  name: string;
+  playerId: string;
+  userId: string;
+  level: number;
+  ping: number;
+  location: {
+    x: number;
+    y: number;
+  };
+  server?: string;
+  steamId?: string;
+}
+
+interface MapProps {
+  players: Player[];
+  onMapClick?: (x: number, y: number) => void;
+  isAdmin?: boolean;
+  selectedServerId?: string;
+  onServerChange?: (serverId: string) => void;
+}
+
+// Configurações do mapa
+const MAP_WORLD_MIN_X = -500000;
+const MAP_WORLD_MAX_X = 500000;
+const MAP_WORLD_MIN_Y = -500000;
+const MAP_WORLD_MAX_Y = 500000;
+const MAP_WORLD_WIDTH = MAP_WORLD_MAX_X - MAP_WORLD_MIN_X;
+const MAP_WORLD_HEIGHT = MAP_WORLD_MAX_Y - MAP_WORLD_MIN_Y;
+const MAP_CANVAS_WIDTH = 1920;
+const MAP_CANVAS_HEIGHT = 1080;
+
+export default function Map({ players, onMapClick, isAdmin = false }: MapProps) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Converte coordenadas do mundo para o canvas
+  const worldToCanvas = (worldX: number, worldY: number) => {
+    const relativeX = (worldX - MAP_WORLD_MIN_X) / MAP_WORLD_WIDTH;
+    const relativeY = (worldY - MAP_WORLD_MIN_Y) / MAP_WORLD_HEIGHT;
+
+    // Inverte X para que coordenadas negativas fiquem à direita
+    const canvasX = (1 - relativeX) * MAP_CANVAS_WIDTH;
+    const canvasY = relativeY * MAP_CANVAS_HEIGHT;
+
+    return {
+      x: Math.max(0, Math.min(MAP_CANVAS_WIDTH, canvasX)),
+      y: Math.max(0, Math.min(MAP_CANVAS_HEIGHT, canvasY))
+    };
+  };
+
+  useEffect(() => {
+    // Simulação de carregamento
+    const timer = setTimeout(() => {
+      setIsLoading(false);
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, []);
+
+  const handleCanvasClick = (event: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!onMapClick || !isAdmin) return;
+
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+
+    // Converter de volta para coordenadas do mundo
+    const relativeX = 1 - (x / MAP_CANVAS_WIDTH);
+    const relativeY = y / MAP_CANVAS_HEIGHT;
+
+    const worldX = MAP_WORLD_MIN_X + (relativeX * MAP_WORLD_WIDTH);
+    const worldY = MAP_WORLD_MIN_Y + (relativeY * MAP_WORLD_HEIGHT);
+
+    onMapClick(worldX, worldY);
+  };
+
+  if (isLoading) {
+    return (
+      <div className="w-full h-[600px] bg-gray-800 rounded-lg flex items-center justify-center">
+        <p className="text-gray-400">Carregando mapa...</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative w-full h-[600px] rounded-lg overflow-hidden border border-gray-700">
+      <canvas
+        ref={canvasRef}
+        width={1920}
+        height={1080}
+        onClick={handleCanvasClick}
+        className="w-full h-full cursor-crosshair"
+        style={{ imageRendering: 'pixelated' }}
+      />
+
+      {/* Controles de zoom simples */}
+      <div className="absolute top-4 right-4 flex flex-col gap-2">
+        <button
+          onClick={() => console.log('Zoom in')}
+          className="bg-gray-700 hover:bg-gray-600 text-white p-2 rounded"
+          title="Aproximar"
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M12 5v14M5 12h14"/>
+          </svg>
+        </button>
+
+        <button
+          onClick={() => console.log('Zoom out')}
+          className="bg-gray-700 hover:bg-gray-600 text-white p-2 rounded"
+          title="Afastar"
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M5 12h14"/>
+          </svg>
+        </button>
+      </div>
+
+      {/* Jogadores com coordenadas corretas */}
+      {players.map((player) => {
+        const pos = worldToCanvas(player.location.x, player.location.y);
+        return (
+          <div
+            key={player.playerId}
+            className="absolute w-3 h-3 bg-blue-500 rounded-full border-2 border-white"
+            style={{
+              left: `${(pos.x / MAP_CANVAS_WIDTH) * 100}%`,
+              top: `${(pos.y / MAP_CANVAS_HEIGHT) * 100}%`,
+              transform: 'translate(-50%, -50%)'
+            }}
+            title={`${player.name} (${player.level}) - ${player.location.x}, ${player.location.y}`}
+          />
+        );
+      })}
+    </div>
+  );
+}
