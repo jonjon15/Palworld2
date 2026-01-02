@@ -162,6 +162,12 @@ export default function Dashboard() {
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-3xl font-bold">Palworld Admin Panel</h1>
           <div className="flex gap-3">
+            <button
+              onClick={() => router.push('/stats')}
+              className="bg-cyan-600 hover:bg-cyan-700 px-4 py-2 rounded-lg transition"
+            >
+              📊 Estatísticas
+            </button>
             {isAdmin && (
               <button
                 onClick={() => router.push('/users')}
