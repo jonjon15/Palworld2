@@ -56,9 +56,17 @@ export default function GiveItemsPage() {
     try {
       const res = await fetch('/api/players');
       const data = await res.json();
-      setPlayers(data || []);
+      // Garantir que sempre seja um array
+      if (Array.isArray(data)) {
+        setPlayers(data);
+      } else if (data && Array.isArray(data.players)) {
+        setPlayers(data.players);
+      } else {
+        setPlayers([]);
+      }
     } catch (error) {
       console.error('Erro ao carregar jogadores:', error);
+      setPlayers([]);
     }
   };
 
@@ -158,7 +166,7 @@ export default function GiveItemsPage() {
               onFocus={loadPlayers}
             >
               <option value="">-- Selecione um jogador --</option>
-              {players.map((player) => (
+              {Array.isArray(players) && players.map((player) => (
                 <option key={player.userId} value={player.userId}>
                   {player.name} {player.level ? `(Nv. ${player.level})` : ''}
                 </option>
