@@ -1,4 +1,4 @@
-<![CDATA[#Requires -RunAsAdministrator
+#Requires -RunAsAdministrator
 <#
 .SYNOPSIS
     Instalador Automático do Palworld Position Tracker
@@ -459,4 +459,3 @@ Write-Host ""
 Write-Success "Instalação finalizada! 🎮"
 Write-Host ""
 Read-Host "Pressione Enter para sair"
-]]>
